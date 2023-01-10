@@ -5,7 +5,7 @@ exports.errorHandler = (errors, next) => {
   next(errors);
 };
 
-exports.throwError = (message, statusCode, errors = null) => {
+exports.throwError = (message, statusCode = 500, errors = null) => {
   const error = new Error(message);
   error.statusCode = statusCode;
   error.data = errors;

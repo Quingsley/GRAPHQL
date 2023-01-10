@@ -4,8 +4,14 @@ const mongoose = require("mongoose");
 const multer = require("multer");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
+const { graphqlHTTP } = require("express-graphql");
+
+const schema = require("./graphql/schema");
+const resolver = require("./graphql/resolvers");
 
 const PASSWORD = require("./utils/password").mongoPassword;
+const auth = require("./middlewares/auth");
+const clearImage = require("./utils/clear-image");
 
 const app = express();
 
@@ -44,6 +50,9 @@ app.use((req, res, next) => {
     "GET, POST, PUT, PATCH, DELETE"
   );
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
   next();
 });
 
@@ -57,6 +66,44 @@ app.use((errors, req, res, next) => {
     data: data,
   });
 });
+
+app.use(auth);
+app.put("/post-image", (req, res, next) => {
+  if (!req.isAuth) {
+    throw new Error("Not authenticated");
+  }
+
+  if (!req.file) {
+    return res.status(200).json({
+      message: "No file picked",
+    });
+  }
+
+  if (req.body.oldpath) {
+    clearImage(req.body.oldpath);
+  }
+  return res
+    .status(201)
+    .json({ message: "File stored", path: req.file.path.replace(/\\/g, "/") });
+});
+
+app.use(
+  "/graphql",
+  graphqlHTTP({
+    schema: schema,
+    rootValue: resolver,
+    graphiql: true,
+    customFormatErrorFn(error) {
+      if (!error.originalError) {
+        return error;
+      }
+      const data = error.originalError.data;
+      const message = error.message || "An error occured!.";
+      const statusCode = error.originalError.statusCode;
+      return { message: message, statusCode: statusCode, data: data };
+    },
+  })
+);
 
 async function main() {
   try {
